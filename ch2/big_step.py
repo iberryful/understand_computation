@@ -1,6 +1,7 @@
 import copy
 
-class Number():
+
+class Number:
     def __init__(self, value):
         self.value = value
 
@@ -10,7 +11,11 @@ class Number():
     def reducible(self):
         return False
 
-class Add():
+    def evaluate(self, environment=None):
+        return self
+
+
+class Add:
     def __init__(self, left, right):
         self.left = left
         self.right = right
@@ -29,7 +34,14 @@ class Add():
         else:
             return Number(self.left.value + self.right.value)
 
-class Multiply():
+    def evaluate(self, environment=None):
+        return Number(
+            self.left.evaluate(environment).value + \
+            self.right.evaluate(environment).value
+        )
+
+
+class Multiply:
     def __init__(self, left, right):
         self.left = left
         self.right = right
@@ -48,17 +60,31 @@ class Multiply():
         else:
             return Number(self.left.value * self.right.value)
 
-class Boolean():
+    def evaluate(self, environment=None):
+        return Number(
+            self.left.evaluate(environment).value * \
+            self.right.evaluate(environment).value
+        )
+
+
+class Boolean:
     def __init__(self, value):
         self.value = value
 
     def __repr__(self):
         return str(self.value)
 
+    def __eq__(self, other):
+        return self.value == other.value
+
     def reducible(self):
         return False
 
-class LessThan():
+    def evaluate(self, environment=None):
+        return self
+
+
+class LessThan:
     def __init__(self, left, right):
         self.left = left
         self.right = right
@@ -77,7 +103,14 @@ class LessThan():
         else:
             return Boolean(self.left.value < self.right.value)
 
-class Variable():
+    def evaluate(self, environment=None):
+        return Boolean(
+            self.left.evaluate(environment).value < \
+            self.right.evaluate(environment).value
+        )
+
+
+class Variable:
     def __init__(self, name):
         self.name = name
 
@@ -90,7 +123,11 @@ class Variable():
     def reduce(self, environment):
         return environment[self.name]
 
-class DoNothing():
+    def evaluate(self, environment):
+        return environment[self.name]
+
+
+class DoNothing:
     def __repr__(self):
         return "do-nothing"
 
@@ -100,7 +137,11 @@ class DoNothing():
     def __eq__(self, other):
         return isinstance(other, DoNothing)
 
-class Assign():
+    def evaluate(self, environment):
+        return environment
+
+
+class Assign:
     def __init__(self, name, expression):
         self.name = name
         self.expression = expression
@@ -119,7 +160,14 @@ class Assign():
             new_environment.update({self.name: self.expression})
             return (DoNothing(), new_environment)
 
-class If():
+    def evaluate(self, environment):
+        new_value = self.expression.evaluate(environment)
+        new_env = copy.deepcopy(environment)
+        new_env.update({self.name: new_value})
+        return new_env
+
+
+class If:
     def __init__(self, condition, consequence, alternative):
         self.condition = condition
         self.consequence = consequence
@@ -141,7 +189,14 @@ class If():
             else:
                 return (self.alternative, environment)
 
-class Sequence():
+    def evaluate(self, environment):
+        if self.condition.evaluate(environment) == Boolean(True):
+            return self.consequence.evaluate(environment)
+        else:
+            return self.alternative.evaluate(environment)
+
+
+class Sequence:
     def __init__(self, first, second):
         self.first = first
         self.second = second
@@ -159,7 +214,11 @@ class Sequence():
             reduced_first, reduced_environment = self.first.reduce(environment)
             return (Sequence(reduced_first, self.second), reduced_environment)
 
-class While():
+    def evaluate(self, environment):
+        return self.second.evaluate(self.first.evaluate(environment))
+
+
+class While:
     def __init__(self, condition, body):
         self.condition = condition
         self.body = body
@@ -173,7 +232,13 @@ class While():
     def reduce(self, environment):
         return (If(self.condition, Sequence(self.body, While(self.condition, self.body)), DoNothing()), environment)
 
-class Machine():
+    def evaluate(self, environment):
+        if self.condition.evaluate(environment) == Boolean(True):
+            return self.evaluate(self.body.evaluate(environment))
+        else:
+            return environment
+
+class Machine:
     def __init__(self, statement, environment=None):
         self.statement = statement
         self.environment = environment
@@ -192,53 +257,25 @@ class Machine():
         print(self.statement, self.environment, sep=',')
 
 
-
 if __name__ == '__main__':
-    Machine(
-        Add(
-            Multiply(Number(1), Number(2)),
-            Multiply(Number(3), Number(4))
-        )
-    ).run()
-    print(' ')
+    print(Number(23).evaluate({}))
+    print(
+        LessThan(
+            Add(Variable('x'), Number(2)),
+            Variable('y')
+        ).evaluate({'x': Number(2), 'y': Number(5)})
+    )
 
-    Machine(LessThan(Number(5), Add(Number(2), Number(2)))).run()
-    print(' ')
-
-    Machine(Add(Variable('x'), Variable('y')),
-            {'x': Number(3), 'y': Number(4)}
-            ).run()
-    print(' ')
-
-    stmt = Assign('x', Add(Variable('x'), Number(1)))
-    env = {'x': Number(2)}
-    Machine(stmt, env).run()
-    print(' ')
-
-    Machine(
-        If(
-            Variable('x'),
-            Assign('y', Number(1)),
-            Assign('y', Number(2))
-        ),
-        {'x': Boolean(True)}
-    ).run()
-    print(' ')
-
-    Machine(
+    print(
         Sequence(
             Assign('x', Add(Number(1), Number(1))),
             Assign('y', Add(Variable('x'), Number(3)))
-        ),
-        {}
-    ).run()
-    print(' ')
+        ).evaluate({})
+    )
 
-    Machine(
+    print(
         While(
             LessThan(Variable('x'), Number(5)),
             Assign('x', Multiply(Variable('x'), Number(3)))
-        ),
-        {'x': Number(1)}
-    ).run()
-    print(' ')
+        ).evaluate({'x': Number(1)})
+    )
